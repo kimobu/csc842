@@ -15,5 +15,5 @@ sudo python3 autoruns.py
 The script will enumerate the programs called by Launch Agents/Daemons and hash those programs. For cron jobs, each cron entry will be returned, but no hashing will occur.
 
 # Resources
-[Autoruns](https://docs.microsoft.com/en-us/sysinternals/downloads/autoruns)
-[How Malware Persists on MacOS](https://www.sentinelone.com/blog/how-malware-persists-on-macos/)
+*[Autoruns](https://docs.microsoft.com/en-us/sysinternals/downloads/autoruns)
+*[How Malware Persists on MacOS](https://www.sentinelone.com/blog/how-malware-persists-on-macos/)
