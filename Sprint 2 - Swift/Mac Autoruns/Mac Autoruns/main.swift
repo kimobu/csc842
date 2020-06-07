@@ -13,6 +13,8 @@ import CryptoKit
 let launchDaemonsDir = "/Library/LaunchDaemons/"
 let launchAgentsDir = "/Library/LaunchAgents/"
 let userDir = "/Users/"
+let cronDir = "/var/at/tabs/"
+let loginItems = "/Library/Application Support/com.apple.backgroundtaskmanagementagent/backgrounditems.btm"
 var autorunEntries = [AutorunEntry]()
 
 func enumerateUsers() -> Array<URL> {
@@ -51,7 +53,7 @@ func enumerateLaunchDaemons(userHomeDirs: Array<URL>) {
         if FileManager.default.isReadableFile(atPath: filepath) {
             let fileurl = URL(fileURLWithPath: filepath)
             let program = extractProgramFromPlist(plistURL: fileurl)
-            let autorunentry = AutorunEntry(filepath: filepath, programpath: program, autoruntype: autoruntype)
+            let autorunentry = AutorunEntry(filepath: filepath, programpath: program.absoluteString, autoruntype: autoruntype)
             autorunEntries.append(autorunentry)
         }
     }
@@ -65,7 +67,7 @@ func enumerateLaunchDaemons(userHomeDirs: Array<URL>) {
                 let filepath = userLaunchDaemonDir + file
                 let fileurl = URL(fileURLWithPath: filepath)
                 let program = extractProgramFromPlist(plistURL: fileurl)
-                let autorunentry = AutorunEntry(filepath: filepath, programpath: program, autoruntype: autoruntype)
+                let autorunentry = AutorunEntry(filepath: filepath, programpath: program.absoluteString, autoruntype: autoruntype)
                 autorunEntries.append(autorunentry)
             }
         }
@@ -81,7 +83,7 @@ func enumerateLaunchAgents(userHomeDirs: Array<URL>) {
         if FileManager.default.isReadableFile(atPath: filepath) {
             let fileurl = URL(fileURLWithPath: filepath)
             let program = extractProgramFromPlist(plistURL: fileurl)
-            let autorunentry = AutorunEntry(filepath: filepath, programpath: program, autoruntype: autoruntype)
+            let autorunentry = AutorunEntry(filepath: filepath, programpath: program.absoluteString, autoruntype: autoruntype)
             autorunEntries.append(autorunentry)
         }
     }
@@ -95,15 +97,47 @@ func enumerateLaunchAgents(userHomeDirs: Array<URL>) {
                 let filepath = userLaunchAgentDir + file
                 let fileurl = URL(fileURLWithPath: filepath)
                 let program = extractProgramFromPlist(plistURL: fileurl)
-                let autorunentry = AutorunEntry(filepath: filepath, programpath: program, autoruntype: autoruntype)
+                let autorunentry = AutorunEntry(filepath: filepath, programpath: program.absoluteString, autoruntype: autoruntype)
                 autorunEntries.append(autorunentry)
             }
         }
     }
 }
 
+func enumerateCrons() {
+    if FileManager.default.isReadableFile(atPath: cronDir) == false {
+        return
+    }
+    let cronFiles = try? FileManager.default.contentsOfDirectory(atPath: cronDir)
+    let autoruntype = "Cron Job"
+    for file in cronFiles! {
+        let filepath = cronDir.appending(file)
+        if FileManager.default.isReadableFile(atPath: filepath) {
+            let contents = try! String(contentsOfFile: filepath)
+            let lines = contents.split(separator:"\n")
+            for line in lines {
+                if line.range(of: "^#", options: .regularExpression) == nil {
+                    let autorunentry = AutorunEntry(filepath: filepath, programpath: String(line), autoruntype: autoruntype)
+                    autorunEntries.append(autorunentry)
+                }
+            }
+        }
+    }
+}
+
+func enumerateLoginItems(userHomeDirs: Array<URL>) {
+    for userHomeDir in userHomeDirs {
+        let userLoginItems = userHomeDir.path + loginItems
+        if FileManager.default.isReadableFile(atPath: userLoginItems) {
+            let fileContents = try? Data(contentsOf: URL(fileURLWithPath: userLoginItems))
+            let data = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(fileContents!) as? Data
+            print("\(data)")
+        }
+    }
+}
+
 func printResults() {
-    for type in ["System Launch Daemon", "System Launch Agent", "User Launch Daemon", "User Launch Agent"] {
+    for type in ["System Launch Daemon", "System Launch Agent", "User Launch Daemon", "User Launch Agent", "Cron Job"] {
         print("\(type)")
         for autorunentry in autorunEntries {
             if autorunentry.autoruntype == type {
@@ -117,7 +151,9 @@ func printResults() {
     }
 }
 
-let users = enumerateUsers()
+let users = enumerateUsers()
 enumerateLaunchDaemons(userHomeDirs: users)
 enumerateLaunchAgents(userHomeDirs: users)
+enumerateCrons()
+//enumerateLoginItems(userHomeDirs: users)
 printResults()
