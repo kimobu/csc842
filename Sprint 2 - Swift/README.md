@@ -16,3 +16,6 @@ The program will enumerate the programs called by Launch Agents/Daemons and hash
 # Resources
 * [Autoruns](https://docs.microsoft.com/en-us/sysinternals/downloads/autoruns)
 * [How Malware Persists on MacOS](https://www.sentinelone.com/blog/how-malware-persists-on-macos/)
+
+# Changelog
+20200607 - Added Swift build action
