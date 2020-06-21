@@ -30,7 +30,8 @@ func enumerateUsers() -> Array<URL> {
 }
 
 func extractProgramFromPlist(plistURL: URL) -> URL {
-    var format = PropertyListSerialization.PropertyListFormat.xml //format of the property list
+    // Given a URL to a plist file, load it and extract the Program key
+    var format = PropertyListSerialization.PropertyListFormat.xml
     let fileContents = try? Data(contentsOf: plistURL)
     let plistData = try? PropertyListSerialization.propertyList(from: fileContents!,
         options: .mutableContainersAndLeaves,
@@ -38,6 +39,7 @@ func extractProgramFromPlist(plistURL: URL) -> URL {
     ) as? [String:AnyObject]
     var program = plistData!["Program"]
     if program === nil {
+        // If the Program key does not exist, we should have a ProgramArguments key
         let arguments = plistData!["ProgramArguments"] as! Array<Any>
         program = arguments[0] as! String as AnyObject
     }
@@ -53,7 +55,7 @@ func enumerateLaunchDaemons(userHomeDirs: Array<URL>) {
         if FileManager.default.isReadableFile(atPath: filepath) {
             let fileurl = URL(fileURLWithPath: filepath)
             let program = extractProgramFromPlist(plistURL: fileurl)
-            let autorunentry = AutorunEntry(filepath: filepath, programpath: program.absoluteString, autoruntype: autoruntype)
+            let autorunentry = AutorunEntry(filepath: filepath, programpath: program.path, autoruntype: autoruntype)
             autorunEntries.append(autorunentry)
         }
     }
@@ -67,7 +69,7 @@ func enumerateLaunchDaemons(userHomeDirs: Array<URL>) {
                 let filepath = userLaunchDaemonDir + file
                 let fileurl = URL(fileURLWithPath: filepath)
                 let program = extractProgramFromPlist(plistURL: fileurl)
-                let autorunentry = AutorunEntry(filepath: filepath, programpath: program.absoluteString, autoruntype: autoruntype)
+                let autorunentry = AutorunEntry(filepath: filepath, programpath: program.path, autoruntype: autoruntype)
                 autorunEntries.append(autorunentry)
             }
         }
@@ -83,7 +85,7 @@ func enumerateLaunchAgents(userHomeDirs: Array<URL>) {
         if FileManager.default.isReadableFile(atPath: filepath) {
             let fileurl = URL(fileURLWithPath: filepath)
             let program = extractProgramFromPlist(plistURL: fileurl)
-            let autorunentry = AutorunEntry(filepath: filepath, programpath: program.absoluteString, autoruntype: autoruntype)
+            let autorunentry = AutorunEntry(filepath: filepath, programpath: program.path, autoruntype: autoruntype)
             autorunEntries.append(autorunentry)
         }
     }
@@ -97,7 +99,7 @@ func enumerateLaunchAgents(userHomeDirs: Array<URL>) {
                 let filepath = userLaunchAgentDir + file
                 let fileurl = URL(fileURLWithPath: filepath)
                 let program = extractProgramFromPlist(plistURL: fileurl)
-                let autorunentry = AutorunEntry(filepath: filepath, programpath: program.absoluteString, autoruntype: autoruntype)
+                let autorunentry = AutorunEntry(filepath: filepath, programpath: program.path, autoruntype: autoruntype)
                 autorunEntries.append(autorunentry)
             }
         }
@@ -106,6 +108,7 @@ func enumerateLaunchAgents(userHomeDirs: Array<URL>) {
 
 func enumerateCrons() {
     if FileManager.default.isReadableFile(atPath: cronDir) == false {
+        // A non-admin user cannot read cron files, so bail
         return
     }
     let cronFiles = try? FileManager.default.contentsOfDirectory(atPath: cronDir)
@@ -117,6 +120,7 @@ func enumerateCrons() {
             let lines = contents.split(separator:"\n")
             for line in lines {
                 if line.range(of: "^#", options: .regularExpression) == nil {
+                    // A line that starts with a # is a comment, so we can ignore it
                     let autorunentry = AutorunEntry(filepath: filepath, programpath: String(line), autoruntype: autoruntype)
                     autorunEntries.append(autorunentry)
                 }
@@ -126,18 +130,39 @@ func enumerateCrons() {
 }
 
 func enumerateLoginItems(userHomeDirs: Array<URL>) {
+    var format = PropertyListSerialization.PropertyListFormat.xml
+    let autoruntype = "Background Item"
     for userHomeDir in userHomeDirs {
         let userLoginItems = userHomeDir.path + loginItems
         if FileManager.default.isReadableFile(atPath: userLoginItems) {
             let fileContents = try? Data(contentsOf: URL(fileURLWithPath: userLoginItems))
-            let data = try? NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(fileContents!) as? Data
-            print("\(data)")
+             let plistData = try? PropertyListSerialization.propertyList(from: fileContents!,
+                 options: .mutableContainersAndLeaves,
+                 format: &format
+             ) as? [String:AnyObject]
+             let objects = plistData!["$objects"] as! Array<Any>
+             for item in objects {
+                // Each object key should have a program URL present
+                // Format is file:///path/to/app.app
+                 if String(describing: type(of: item)) == "__NSCFData" {
+                     let theString:NSString = NSString(data: item as! Data, encoding: String.Encoding.ascii.rawValue) ?? "<nil>"
+                     let pattern = "/([A-z0-9-_+ %]+/)*([A-z0-9 %]+.(app))"
+                    // This Regex finds the first .app string, which may not be correct, since /Application/app.app is a directory
+                    // TODO: Better Regex which finds the full path of the binary that gets executed
+                     let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive)
+                     if let match = regex?.firstMatch(in: theString as String, options: [], range: NSRange(location: 0, length: theString.length)) {
+                         let programpath = theString.substring(with: match.range)
+                         let autorunentry = AutorunEntry(filepath: userLoginItems, programpath: programpath, autoruntype: autoruntype)
+                         autorunEntries.append(autorunentry)
+                     }
+                 }
+             }
         }
     }
 }
 
 func printResults() {
-    for type in ["System Launch Daemon", "System Launch Agent", "User Launch Daemon", "User Launch Agent", "Cron Job"] {
+    for type in ["System Launch Daemon", "System Launch Agent", "User Launch Daemon", "User Launch Agent", "Cron Job", "Background Item"] {
         print("\(type)")
         for autorunentry in autorunEntries {
             if autorunentry.autoruntype == type {
@@ -146,6 +171,10 @@ func printResults() {
                 print("\t\t\(autorunentry.md5)")
                 print("\t\t\(autorunentry.sha1)")
                 print("\t\t\(autorunentry.sha256)")
+                print("\t\tCertificate Chain:")
+                for cert in autorunentry.certChain {
+                    print("\t\t\t\(cert)")
+                }
             }
         }
     }
@@ -155,5 +184,5 @@ let users = enumerateUsers()
 enumerateLaunchDaemons(userHomeDirs: users)
 enumerateLaunchAgents(userHomeDirs: users)
 enumerateCrons()
-//enumerateLoginItems(userHomeDirs: users)
+enumerateLoginItems(userHomeDirs: users)
 printResults()
