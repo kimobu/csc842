@@ -18,4 +18,5 @@ The program will enumerate the programs called by Launch Agents/Daemons and hash
 * [How Malware Persists on MacOS](https://www.sentinelone.com/blog/how-malware-persists-on-macos/)
 
 # Changelog
+20200621 - Added first take at extracting items from the background items plist; displaying certificate chain
 20200607 - Added Swift build action
