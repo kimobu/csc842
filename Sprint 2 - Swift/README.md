@@ -6,8 +6,9 @@ N/A
 # Usage
 
 The program takes no arguments.
-./MAC\ Autoruns
-sudo is required to enumerate cron entries and system level plist files. The program can be run with normal user privileges, but the data returned will be incomplete.
+`./MAC\ Autoruns`
+
+`sudo` is required to enumerate cron entries and system level plist files. The program can be run with normal user privileges, but the data returned will be incomplete.
 
 ## Information
 
@@ -19,4 +20,5 @@ The program will enumerate the programs called by Launch Agents/Daemons and hash
 
 # Changelog
 20200621 - Added first take at extracting items from the background items plist; displaying certificate chain
+
 20200607 - Added Swift build action
